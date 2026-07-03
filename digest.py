@@ -14,14 +14,18 @@ import os
 import re
 import sys
 import json
-import ssl
-import smtplib
+import base64
 from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from zoneinfo import ZoneInfo
 
 import anthropic
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
+from googleapiclient.discovery import build
+
+GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send"
 
 EASTERN = ZoneInfo("America/New_York")
 SEND_HOUR = 7  # deliver during the 7 AM Eastern hour, year-round
@@ -114,7 +118,25 @@ def generate_digest(client: anthropic.Anthropic, today: str) -> tuple[str, str, 
     return data["subject"], data["html_body"], data["text_body"]
 
 
-def send_email(sender: str, password: str, recipient: str,
+def gmail_service():
+    """Build an authenticated Gmail API client from OAuth secrets.
+
+    Uses a long-lived refresh token (generated once) to mint a fresh access
+    token on every run, so no browser/interaction is needed in CI.
+    """
+    creds = Credentials(
+        token=None,
+        refresh_token=require_env("GMAIL_REFRESH_TOKEN"),
+        client_id=require_env("GMAIL_CLIENT_ID"),
+        client_secret=require_env("GMAIL_CLIENT_SECRET"),
+        token_uri="https://oauth2.googleapis.com/token",
+        scopes=[GMAIL_SEND_SCOPE],
+    )
+    creds.refresh(Request())
+    return build("gmail", "v1", credentials=creds, cache_discovery=False)
+
+
+def send_email(service, sender: str, recipient: str,
                subject: str, html_body: str, text_body: str) -> None:
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
@@ -123,10 +145,8 @@ def send_email(sender: str, password: str, recipient: str,
     msg.attach(MIMEText(text_body, "plain", "utf-8"))
     msg.attach(MIMEText(html_body, "html", "utf-8"))
 
-    context = ssl.create_default_context()
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
-        server.login(sender, password)
-        server.sendmail(sender, [recipient], msg.as_string())
+    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+    service.users().messages().send(userId="me", body={"raw": raw}).execute()
 
 
 def main() -> int:
@@ -139,7 +159,6 @@ def main() -> int:
 
     api_key = require_env("ANTHROPIC_API_KEY")
     sender = require_env("SENDER_EMAIL")
-    password = require_env("GMAIL_APP_PASSWORD")
     recipient = require_env("RECIPIENT_EMAIL")
 
     today = now_et.strftime("%A, %B %-d, %Y")
@@ -148,8 +167,9 @@ def main() -> int:
     client = anthropic.Anthropic(api_key=api_key)
     subject, html_body, text_body = generate_digest(client, today)
 
+    service = gmail_service()  # validates the OAuth secrets before we send
     print(f"Sending '{subject}' -> {recipient}")
-    send_email(sender, password, recipient, subject, html_body, text_body)
+    send_email(service, sender, recipient, subject, html_body, text_body)
     print("Digest sent. xoxo")
     return 0
 

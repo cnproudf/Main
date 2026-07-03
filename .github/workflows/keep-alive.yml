@@ -1,0 +1,26 @@
+name: Keep Alive
+
+# GitHub automatically disables scheduled workflows in a repository that goes
+# 60 days without commit activity. This repo mostly just sits and runs the
+# digest, so we push a tiny empty commit twice a month to keep the clock reset
+# and the daily digest schedule alive indefinitely.
+on:
+  schedule:
+    - cron: "17 13 1,15 * *"   # 1st and 15th of each month, 13:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Push empty keep-alive commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit --allow-empty -m "chore: keep-alive (prevent scheduled-workflow auto-disable)"
+          git push

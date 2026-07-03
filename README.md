@@ -18,9 +18,10 @@ account. No servers, no daily babysitting.
 
 | File | Role |
 |------|------|
-| `digest.py` | Searches for news (via the Anthropic web-search tool), writes the digest, emails it. |
+| `digest.py` | Searches for news (via the Anthropic web-search tool), writes the digest, sends it via the Gmail API. |
 | `.github/workflows/daily-digest.yml` | Runs `digest.py` on a daily schedule. |
-| `requirements.txt` | Python dependency (`anthropic`). |
+| `.github/workflows/keep-alive.yml` | Twice-monthly empty commit so GitHub doesn't auto-disable the schedule. |
+| `requirements.txt` | Python dependencies (`anthropic`, `google-auth`, `google-api-python-client`). |
 
 The workflow fires at two UTC times that bracket 7 AM Eastern; `digest.py` checks
 the real `America/New_York` time and only sends during the 7 AM hour, so it stays
@@ -28,24 +29,40 @@ correct through daylight-saving changes.
 
 ## One-time setup
 
-### 1. Sender account — App Password
-The digest sends from `awwswiftie@chadnproudfoot.com`.
-1. Sign in to that account → **Google Account → Security**.
-2. Turn on **2-Step Verification**.
-3. Create an **App Password** (Security → App passwords), name it "Swiftie Digest",
-   and copy the 16-character code.
+### 1. Sender account — Gmail API OAuth
+The digest sends from `awwswiftie@chadnproudfoot.com` via the Gmail API. This
+replaces App Passwords (which are disabled on this Workspace domain). All in the
+browser, signed in **as the sender account**:
+
+1. **Google Cloud Console** (<https://console.cloud.google.com>) → create a project, e.g. "Swiftie Digest".
+2. **APIs & Services → Library** → search "Gmail API" → **Enable**.
+3. **APIs & Services → OAuth consent screen** → **User type: Internal** → fill in
+   app name + support email → Save. *(Internal = no Google verification and the
+   refresh token never expires. Requires signing in with the Workspace account.)*
+4. **APIs & Services → Credentials → Create credentials → OAuth client ID** →
+   **Application type: Web application** → under *Authorized redirect URIs* add
+   `https://developers.google.com/oauthplayground` → Create. Copy the **Client ID**
+   and **Client secret**.
+5. Get a refresh token with the **OAuth 2.0 Playground** (<https://developers.google.com/oauthplayground>):
+   - Click the ⚙️ (top-right) → check **Use your own OAuth credentials** → paste the
+     Client ID and Client secret.
+   - In the left "Input your own scopes" box, enter `https://www.googleapis.com/auth/gmail.send`
+     → **Authorize APIs** → sign in as `awwswiftie@chadnproudfoot.com` → Allow.
+   - Click **Exchange authorization code for tokens** → copy the **Refresh token**.
 
 ### 2. Anthropic API key
 1. Go to <https://console.anthropic.com>, sign up, add a small amount of pay-as-you-go credit.
 2. **API Keys → Create Key**, copy it.
    > Cost is only a few cents per day (one model call + a handful of web searches).
 
-### 3. Add the three secrets to this repo
+### 3. Add the secrets to this repo
 **Settings → Secrets and variables → Actions → New repository secret:**
 
 | Secret name | Value |
 |-------------|-------|
-| `GMAIL_APP_PASSWORD` | the 16-char App Password from step 1 |
+| `GMAIL_CLIENT_ID` | OAuth Client ID from step 1.4 |
+| `GMAIL_CLIENT_SECRET` | OAuth Client secret from step 1.4 |
+| `GMAIL_REFRESH_TOKEN` | Refresh token from step 1.5 |
 | `ANTHROPIC_API_KEY` | the key from step 2 |
 | `RECIPIENT_EMAIL` | the recipient's email address |
 
