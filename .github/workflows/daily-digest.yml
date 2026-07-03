@@ -1,0 +1,39 @@
+name: Daily Taylor Swift Digest
+
+# Sent every morning to our Swiftie. GitHub Actions cron runs in UTC with no
+# daylight-saving handling, so we fire at two UTC times that bracket 7 AM
+# Eastern across the year; digest.py then verifies it's the 7 AM Eastern hour
+# in America/New_York and only sends on the one that matches. Result: exactly
+# one send per day at ~7:30 AM ET, summer and winter.
+on:
+  schedule:
+    - cron: "34 11 * * *"   # 7:34 AM EDT (summer);  6:34 AM EST (winter, skipped)
+    - cron: "34 12 * * *"   # 8:34 AM EDT (summer, skipped);  7:34 AM EST (winter)
+  workflow_dispatch:         # lets you run it by hand from the Actions tab
+    inputs:
+      force_send:
+        description: "Send immediately, ignoring the 7 AM time check (for testing)"
+        type: boolean
+        default: true
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Compose and send the digest
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
+          SENDER_EMAIL: awwswiftie@chadnproudfoot.com
+          FORCE_SEND: ${{ github.event_name == 'workflow_dispatch' && inputs.force_send }}
+        run: python digest.py
