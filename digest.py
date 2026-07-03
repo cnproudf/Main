@@ -15,7 +15,7 @@ import re
 import sys
 import json
 import base64
-from datetime import datetime
+from datetime import datetime, date
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from zoneinfo import ZoneInfo
@@ -30,6 +30,12 @@ GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send"
 EASTERN = ZoneInfo("America/New_York")
 SEND_HOUR = 7  # deliver during the 7 AM Eastern hour, year-round
 MODEL = "claude-sonnet-5"
+FOUNDED = date(2026, 7, 3)  # the day The Secret Swiftie Society was founded
+
+
+def dispatch_number(today: date) -> int:
+    """A membership-flavored issue number that ticks up one per day, forever."""
+    return (today - FOUNDED).days + 1
 
 SYSTEM_PROMPT = """\
 You are the voice behind "The Secret Swiftie Society" — a daily insider dispatch \
@@ -54,7 +60,12 @@ everywhere") instead of filling space.
 """
 
 USER_TEMPLATE = """\
-Today is {today}. Put together today's digest for our Swiftie.
+Today is {today}. This is Dispatch No. {dispatch_no:03d} of The Secret Swiftie \
+Society. Put together today's digest for our Swiftie.
+
+Somewhere near the top, work in the dispatch number as a fun secret-society \
+stamp, e.g. "DISPATCH No. {dispatch_no:03d} · CLEARANCE: EARS ONLY" — treat it \
+like the membership badge on a classified briefing.
 
 Search the web for the most recent Taylor Swift news and organize what you find \
 into these three sections (skip a section gracefully if there's truly nothing new):
@@ -103,13 +114,15 @@ def extract_json(text: str) -> dict:
     return json.loads(match.group(0))
 
 
-def generate_digest(client: anthropic.Anthropic, today: str) -> tuple[str, str, str]:
+def generate_digest(client: anthropic.Anthropic, today: str,
+                    dispatch_no: int) -> tuple[str, str, str]:
+    prompt = USER_TEMPLATE.format(today=today, dispatch_no=dispatch_no)
     resp = client.messages.create(
         model=MODEL,
         max_tokens=4000,
         system=SYSTEM_PROMPT,
         tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 8}],
-        messages=[{"role": "user", "content": USER_TEMPLATE.format(today=today)}],
+        messages=[{"role": "user", "content": prompt}],
     )
     text = "\n".join(b.text for b in resp.content if b.type == "text").strip()
     data = extract_json(text)
@@ -163,10 +176,11 @@ def main() -> int:
     recipient = require_env("RECIPIENT_EMAIL")
 
     today = now_et.strftime("%A, %B %-d, %Y")
-    print(f"Composing the digest for {today}...")
+    dispatch_no = dispatch_number(now_et.date())
+    print(f"Composing Dispatch No. {dispatch_no:03d} for {today}...")
 
     client = anthropic.Anthropic(api_key=api_key)
-    subject, html_body, text_body = generate_digest(client, today)
+    subject, html_body, text_body = generate_digest(client, today, dispatch_no)
 
     service = gmail_service()  # validates the OAuth secrets before we send
     print(f"Sending '{subject}' -> {recipient}")
