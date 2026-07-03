@@ -1,4 +1,4 @@
-# 💌 The Swiftie Inner Circle — Daily Taylor Swift News Digest
+# 💌 The Secret Swiftie Society — Daily Taylor Swift News Digest
 
 A tiny automated job that emails a warm, VIP-toned Taylor Swift news digest to
 one very lucky Swiftie every morning at **~7:30 AM Eastern**.

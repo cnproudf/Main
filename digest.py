@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Daily Taylor Swift news digest — the Swiftie Inner Circle dispatch.
+"""Daily Taylor Swift news digest — The Secret Swiftie Society dispatch.
 
 Runs each morning in GitHub Actions: searches for fresh Taylor Swift news via
 the Anthropic web-search tool, writes an *original* VIP-toned digest (headlines,
@@ -32,11 +32,12 @@ SEND_HOUR = 7  # deliver during the 7 AM Eastern hour, year-round
 MODEL = "claude-sonnet-5"
 
 SYSTEM_PROMPT = """\
-You are the voice behind "The Swiftie Inner Circle" — a daily insider dispatch \
+You are the voice behind "The Secret Swiftie Society" — a daily insider dispatch \
 written for one very special reader, a devoted Taylor Swift superfan. Your job \
 is to make her feel like a VIP getting the scoop first: warm, playful, a little \
 conspiratorial, like a best friend slipping her exclusive intel. Never corporate, \
-never a press release. Think group-chat energy, inside jokes, gentle hype.
+never a press release. Think group-chat energy, inside jokes, gentle hype, and a \
+fun secret-society wink (she's a card-carrying member).
 
 INTEGRITY RULES — these are absolute:
 - Only include items you ACTUALLY found through web search in this session, each \
@@ -66,7 +67,7 @@ For each item: a one-line headline, then a short ORIGINAL blurb (1-2 sentences, 
 your own words), then a source link.
 
 Wrap it with a warm, VIP "you heard it here first" intro and a fun signoff from \
-"Your Inner Circle."
+"The Secret Swiftie Society."
 
 Return your answer as ONE JSON object and NOTHING else, with exactly these keys:
 {{
@@ -140,7 +141,7 @@ def send_email(service, sender: str, recipient: str,
                subject: str, html_body: str, text_body: str) -> None:
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"] = f"Your Swiftie Inner Circle <{sender}>"
+    msg["From"] = f"The Secret Swiftie Society <{sender}>"
     msg["To"] = recipient
     msg.attach(MIMEText(text_body, "plain", "utf-8"))
     msg.attach(MIMEText(html_body, "html", "utf-8"))
