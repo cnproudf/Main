@@ -13,8 +13,8 @@ says so with personality rather than inventing anything.
 import os
 import re
 import sys
-import json
 import base64
+import html as html_lib
 from datetime import datetime, date
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -79,14 +79,16 @@ your own words), then a source link.
 Wrap it with a warm, VIP "you heard it here first" intro and a fun signoff from \
 "The Secret Swiftie Society."
 
-Return your answer as ONE JSON object and NOTHING else, with exactly these keys:
-{{
-  "subject": "a fun, clickable email subject line (include today's date)",
-  "html_body": "the full digest as clean HTML — use <h2> section headers with the \
-emoji, bold headlines, short blurbs, and <a href> links styled as 'Read the tea →'. \
-Keep inline styling simple and mobile-friendly.",
-  "text_body": "a plain-text version of the same digest with URLs written out"
-}}
+Format your reply EXACTLY like this, and nothing else:
+
+SUBJECT: <a fun, clickable subject line that includes today's date>
+---
+<the full digest as clean HTML: an <h2> section header (with its emoji) per \
+section, bold headlines, short blurbs, and <a href> source links styled as \
+'Read the tea →'. Keep inline styling simple and mobile-friendly.>
+
+Put "SUBJECT:" on the very first line, then a line containing only three dashes \
+(---), then the HTML body. Do not use code fences or add anything else.
 """
 
 
@@ -97,12 +99,36 @@ def require_env(name: str) -> str:
     return val
 
 
-def extract_json(text: str) -> dict:
-    """Pull the outermost JSON object out of the model's reply."""
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if not match:
-        raise ValueError(f"No JSON object found in model output:\n{text[:1000]}")
-    return json.loads(match.group(0))
+def html_to_text(html_body: str) -> str:
+    """Best-effort plain-text alternative derived from the HTML body."""
+    text = re.sub(r"(?is)<a[^>]*href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>",
+                  r"\2 (\1)", html_body)
+    text = re.sub(r"(?i)<(br|/p|/div|/h[1-6])\s*/?>", "\n", text)
+    text = re.sub(r"(?s)<[^>]+>", "", text)
+    text = html_lib.unescape(text)
+    text = re.sub(r"[ \t]+\n", "\n", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def parse_reply(raw: str) -> tuple[str, str]:
+    """Split the model's 'SUBJECT: / --- / HTML' reply into (subject, html_body)."""
+    raw = raw.strip()
+    if raw.startswith("```"):  # strip stray code fences, just in case
+        raw = re.sub(r"^```[a-zA-Z]*\n", "", raw)
+        raw = re.sub(r"\n```$", "", raw).strip()
+    lines = raw.splitlines()
+    idx = next((i for i, line in enumerate(lines) if line.strip() == "---"), None)
+    if idx is not None:
+        subject_part = "\n".join(lines[:idx])
+        html_body = "\n".join(lines[idx + 1:]).strip()
+    else:  # no delimiter found — fall back to "first line is the subject"
+        subject_part = lines[0] if lines else ""
+        html_body = "\n".join(lines[1:]).strip()
+    subject = re.sub(r"(?i)^subject:\s*", "", subject_part.strip()).strip()
+    if not subject or not html_body:
+        raise ValueError(f"Could not parse subject/body from model output:\n{raw[:800]}")
+    return subject, html_body
 
 
 def generate_digest(client: anthropic.Anthropic, today: str,
@@ -110,17 +136,17 @@ def generate_digest(client: anthropic.Anthropic, today: str,
     prompt = USER_TEMPLATE.format(today=today, dispatch_no=dispatch_no)
     resp = client.messages.create(
         model=MODEL,
-        max_tokens=4000,
+        max_tokens=8000,
         system=SYSTEM_PROMPT,
         tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 8}],
         messages=[{"role": "user", "content": prompt}],
     )
+    if resp.stop_reason == "max_tokens":
+        print("WARNING: model output hit the token limit; sending what we have.")
     text = "\n".join(b.text for b in resp.content if b.type == "text").strip()
-    data = extract_json(text)
-    for key in ("subject", "html_body", "text_body"):
-        if not data.get(key):
-            raise ValueError(f"Model output missing '{key}'. Got keys: {list(data)}")
-    return data["subject"], data["html_body"], data["text_body"]
+    subject, html_body = parse_reply(text)
+    text_body = html_to_text(html_body)
+    return subject, html_body, text_body
 
 
 def gmail_service():
