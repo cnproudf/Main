@@ -69,11 +69,19 @@ browser, signed in **as the sender account**:
 The sender address lives in the workflow file (`SENDER_EMAIL`), not in secrets.
 
 ### 4. Test it
-**Actions → Daily Taylor Swift Digest → Run workflow** (leave "Send immediately"
-checked). This bypasses the time check and sends right away so you can confirm it
-lands. After that, it runs itself every morning.
+**Actions → Daily Taylor Swift Digest → Run workflow**. A manual run sends right
+away, so you can confirm it lands. After that, it runs itself every morning.
+
+## Scheduling notes
+- The digest runs on a **single daily cron** and sends whenever that run fires.
+- GitHub's free scheduler is **best-effort** — runs can be delayed by anywhere
+  from a few minutes to a couple of hours (worst on high-traffic days). So "7:30
+  AM" really means "sometime in the morning." The email will still go out; it may
+  just be late. For to-the-minute punctuality you'd move the schedule to a
+  dedicated scheduler (e.g. Google Cloud Scheduler).
 
 ## Changing things later
-- **Time / timezone:** edit the two `cron` lines and `SEND_HOUR` in `digest.py`.
+- **Time / timezone:** edit the `cron` line in `.github/workflows/daily-digest.yml`
+  (it's in UTC; 11:34 UTC ≈ 7:34 AM ET in summer).
 - **Recipient:** update the `RECIPIENT_EMAIL` secret.
 - **Tone or sections:** edit `SYSTEM_PROMPT` / `USER_TEMPLATE` in `digest.py`.

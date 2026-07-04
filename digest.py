@@ -28,7 +28,6 @@ from googleapiclient.discovery import build
 GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send"
 
 EASTERN = ZoneInfo("America/New_York")
-SEND_HOUR = 7  # deliver during the 7 AM Eastern hour, year-round
 MODEL = "claude-sonnet-5"
 FOUNDED = date(2026, 7, 3)  # the day The Secret Swiftie Society was founded
 
@@ -89,14 +88,6 @@ Keep inline styling simple and mobile-friendly.",
   "text_body": "a plain-text version of the same digest with URLs written out"
 }}
 """
-
-
-def within_send_window(force: bool) -> bool:
-    """True only during the 7 AM Eastern hour (or when forced for a test run)."""
-    if force:
-        return True
-    now = datetime.now(EASTERN)
-    return now.hour == SEND_HOUR
 
 
 def require_env(name: str) -> str:
@@ -164,12 +155,11 @@ def send_email(service, sender: str, recipient: str,
 
 
 def main() -> int:
-    force = os.environ.get("FORCE_SEND", "").strip().lower() in ("1", "true", "yes")
+    # This runs once per day on a single morning cron. GitHub's scheduler is
+    # best-effort and can fire hours late, so we deliberately do NOT gate on the
+    # exact hour — whenever the daily run fires, it sends. One cron per day means
+    # it still only sends once.
     now_et = datetime.now(EASTERN)
-
-    if not within_send_window(force):
-        print(f"Not the 7 AM Eastern hour (now {now_et:%Y-%m-%d %H:%M %Z}); skipping.")
-        return 0
 
     api_key = require_env("ANTHROPIC_API_KEY")
     sender = require_env("SENDER_EMAIL")

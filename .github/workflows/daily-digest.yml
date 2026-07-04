@@ -1,20 +1,15 @@
 name: Daily Taylor Swift Digest
 
-# Sent every morning to our Swiftie. GitHub Actions cron runs in UTC with no
-# daylight-saving handling, so we fire at two UTC times that bracket 7 AM
-# Eastern across the year; digest.py then verifies it's the 7 AM Eastern hour
-# in America/New_York and only sends on the one that matches. Result: exactly
-# one send per day at ~7:30 AM ET, summer and winter.
+# Sent every morning to our Swiftie. GitHub Actions cron runs in UTC, so 11:34
+# UTC is ~7:34 AM ET in summer (EDT) and ~6:34 AM ET in winter (EST). We use a
+# SINGLE daily cron and the script sends whenever this run fires — GitHub's
+# free scheduler is best-effort and often runs late, so we no longer gate on
+# the exact hour (that's what silently skipped the send before). One cron a day
+# = exactly one email a day, even if GitHub delivers it late.
 on:
   schedule:
-    - cron: "34 11 * * *"   # 7:34 AM EDT (summer);  6:34 AM EST (winter, skipped)
-    - cron: "34 12 * * *"   # 8:34 AM EDT (summer, skipped);  7:34 AM EST (winter)
-  workflow_dispatch:         # lets you run it by hand from the Actions tab
-    inputs:
-      force_send:
-        description: "Send immediately, ignoring the 7 AM time check (for testing)"
-        type: boolean
-        default: true
+    - cron: "34 11 * * *"   # ~7:34 AM ET (EDT) / ~6:34 AM ET (EST)
+  workflow_dispatch:         # lets you run it by hand from the Actions tab anytime
 
 jobs:
   digest:
@@ -37,5 +32,4 @@ jobs:
           GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}
           RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
           SENDER_EMAIL: awwswiftie@chadnproudfoot.com
-          FORCE_SEND: ${{ github.event_name == 'workflow_dispatch' && inputs.force_send }}
         run: python digest.py
